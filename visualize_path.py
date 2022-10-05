@@ -10,7 +10,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 import time
-import copy
+import pygame
+import os
 
 def initialize_circle(num_vertices):
     assert num_vertices%2 == 0
@@ -238,7 +239,7 @@ class Train_Environment(Env):
 
         self.last_saved_shape_num = last_saved_shape_num
         self.shape_num = -1     # initial shape will be 0 when reset is called
-        self.num_vertices = new_shapes[0].num_vertices
+        self.num_vertices = shape_to_vizualize[0].num_vertices
         self.current_shape = None
         self.state = None
 
@@ -249,16 +250,16 @@ class Train_Environment(Env):
         self.y_total_change = 0.00001
         self.theta_total_change = 0.00001
 
-
         self.num_steps = 0
 
         self.finished = False
 
         self.shapes_completed = [] # shapes that fit through hallway
 
+        self.shape_state_history = [] # only includes theta,x,y becuase vertices are constant
+
     def step(self, action):
         self.num_steps += 1
-
 
         x_total_change_prev = self.x_total_change
         y_total_change_prev = self.y_total_change
@@ -291,8 +292,8 @@ class Train_Environment(Env):
             reward = 0
             done = False
         else:
-            if finished[0] == False:
-                shapes_completed.append(True)
+            if not self.finished:
+                self.shapes_completed.append(self.current_shape)
             reward = 10000
             self.num_steps = 0
             done = True
@@ -301,14 +302,17 @@ class Train_Environment(Env):
         self.state[self.num_vertices*2 + 1] = self.x_total_change
         self.state[self.num_vertices*2 + 2] = self.y_total_change
 
+        if not self.finished:
+            self.shape_state_history.append(hallway_shape)
+
         info = {}
-        if self.num_steps > 100000 and not finished[0]: #arbitrary number
+        if self.num_steps > 100000: #arbitrary number
             draw_points_and_boundaries(self.current_shape.poly, hallway_is_done_shape)
             print("self.theta_total_change %s " % self.theta_total_change)
             print("self.x_total_change %s " % self.x_total_change)
             print("self.y_total_change %s " % self.y_total_change)
             print("pathfinder couldn't find a path for self.shape_num = ",str(self.shape_num))
-            shapes_completed.append(False)
+            self.shapes_completed.append(None)
             done = True
         
         return self.state, reward, done, info
@@ -322,56 +326,16 @@ class Train_Environment(Env):
         # get next
         self.shape_num += 1
         if self.shape_num > self.last_saved_shape_num:
-            finished[0] = True
+            self.finished = True
             self.shape_num = 0
 
-        self.current_shape = new_shapes[self.shape_num]
+        self.current_shape = shape_to_vizualize[self.shape_num]
         self.state = self.current_shape.state_list
         self.state = np.append(self.state,self.x_total_change)
         self.state = np.append(self.state,self.y_total_change)
         self.state = np.append(self.state,self.theta_total_change)
 
         return self.state
-def generate_initial_circles(num_shapes_to_generate, num_vertices, last_saved_shape_num):
-    for i in range(num_shapes_to_generate):
-        poly = initialize_circle(num_vertices)
-        x, y = poly.exterior.xy
-        save_shape(x, y, num_vertices, i + last_saved_shape_num)
-
-def generate_new_shapes(shapes_to_change,num_vertices_to_change, num_vertices, step_length):
-
-    x_step_length = step_length
-    y_step_length = step_length
-    
-    for shape_num, shape in enumerate(shapes_to_change):
-        initial_area = shape.poly.area
-        new_area = 0
-        for _ in range(num_vertices_to_change):
-            original_shape = copy.deepcopy(shape)
-            while new_area < initial_area:
-
-                rand_vertice = random.randint(0,num_vertices-1)
-                rand_sign_x = random.randint(0,1) # 0 is negative, 1 is positive
-                rand_sign_y = random.randint(0,1)
-
-                if rand_sign_x == 0:
-                    shape.x[rand_vertice] -= x_step_length
-                else:
-                    shape.x[rand_vertice] += x_step_length
-                if rand_sign_y == 0:
-                    shape.y[rand_vertice] -= y_step_length
-                else:
-                    shape.y[rand_vertice] += y_step_length
-
-                shape.update_attributes()
-                shape.sort_vertices()
-                if shape.poly.area < initial_area:
-                    shape = original_shape
-                else:
-                    new_area = shape.poly.area
-            initial_area = new_area
-            shapes_to_change[shape_num] = shape
-    return shapes_to_change
 
 def load_shapes(last_saved_shape_num):
     shapes = []
@@ -380,73 +344,59 @@ def load_shapes(last_saved_shape_num):
         shapes.append(Shape(x, y, num_vertices))
     return shapes
 
-num_vertices = 10
-last_saved_shape_num = 9
-
-shapes_to_create = 0 ###########################
-generate_initial_circles(shapes_to_create, num_vertices, last_saved_shape_num)
-#last_saved_shape_num += shapes_to_create - 1
-num_vertices_to_change = 100
-step_length = .1
-time_steps = 20000
-
-
-start_time = time.time()
-shapes = load_shapes(last_saved_shape_num)
-new_shapes = copy.deepcopy(shapes)
-new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length)
-
-for i in range(len(shapes)):
-    if shapes[i].poly.area >= new_shapes[i].poly.area:
-        print('new_shape[%s] has less area than original ' %i )
-
-shapes_completed = []
-finished = [False]
-env = Train_Environment(num_vertices, last_saved_shape_num)
+shape_to_vizualize_num = 0
+x, y, num_vertices = get_shape(shape_to_vizualize_num)
+shape_to_vizualize = [Shape(x, y, num_vertices)]
+env = Train_Environment(num_vertices, 0)
 env = Monitor(env, 'log')
 model = PPO.load('model', env=env) # PPO('MlpPolicy', env, verbose=0)
-generation_rounds = 1000
+time_steps = 20000
+model.learn(total_timesteps=time_steps)
 
-for epoch_num in range(generation_rounds):
-    shapes_completed = []
-    finished = [False]
-    model.learn(total_timesteps=time_steps)
+if env.finished:
+    pygame.init()
+    width = 1000
+    height = 1000
+    scale = width/4
+    shift = width/2 + 150
+    total_time = 10 # seconds
+    time_per_state = total_time/len(env.shape_state_history)
+    screen = pygame.display.set_mode((width,height))
+    white = '0xffffff'
+    black = '0x000000'
+    print('visualizing path of shape %s' % shape_to_vizualize_num)
+    for i in range(len(env.shape_state_history)):
+        screen.fill(white)
+        # draw lines for shape
+        for l in range(num_vertices-1):
+            start_point = [shift + scale*shape_to_vizualize[0].x[l],shift + scale*shape_to_vizualize[0].y[l]]
+            end_point = [shift + scale*shape_to_vizualize[0].x[l+1],shift + scale*shape_to_vizualize[0].y[l+1]]
+            pygame.draw.line(screen,pygame.Color(black),start_point,end_point)
+        # line from last point to first point
+        start_point = [shift + scale*shape_to_vizualize[0].x[num_vertices-1],shift + scale*shape_to_vizualize[0].y[num_vertices-1]]
+        end_point = [shift + scale*shape_to_vizualize[0].x[0],shift + scale*shape_to_vizualize[0].y[0]]
+        pygame.draw.line(screen,pygame.Color(black),start_point,end_point)
 
-    for shape_num in range(len(shapes_completed)):
-        if shapes_completed[shape_num]: # save only completed shapes
-            shapes[shape_num] = copy.deepcopy(new_shapes[shape_num])
-    num_shapes_that_dont_fit = last_saved_shape_num+1 - len(shapes_completed)
-    if num_shapes_that_dont_fit > (last_saved_shape_num/2) and num_vertices_to_change > 10:
-        num_vertices_to_change -= 10
-    else:
-        num_vertices_to_change += 10
+        # hallway lines
+        x,y = env.shape_state_history[i].exterior.xy
+        left_upper_point = [shift + scale*x[0],shift + scale*y[0]]
+        left_lower_point = [shift + scale*x[1],shift + scale*y[1]]
+        middle_middle = [shift + scale*x[2],shift + scale*y[2]]
+        middle_lower = [shift + scale*x[3],shift + scale*y[3]]
+        right_lower = [shift + scale*x[4],shift + scale*y[4]]
+        right_upper = [shift + scale*x[5],shift + scale*y[5]]
+        pygame.draw.line(screen,pygame.Color(black),left_upper_point,left_lower_point)
+        pygame.draw.line(screen,pygame.Color(black),left_lower_point,middle_middle)
+        pygame.draw.line(screen,pygame.Color(black),middle_middle,middle_lower)
+        pygame.draw.line(screen,pygame.Color(black),middle_lower,right_lower)
+        pygame.draw.line(screen,pygame.Color(black),right_lower,right_upper)
+        pygame.draw.line(screen,pygame.Color(black),right_upper,left_upper_point)
+        # sleep
+        time.sleep(0.1)
+        pygame.display.flip()
 
-    if not env.finished:
-        time_steps+=100
-    else:
-        time_steps-=100
+else:
+    print('env not finished, increase time_steps')
 
-    if epoch_num % 1 == 0:
-        print('------------------Epoch %s------------------' % epoch_num)
-        areas = []
-        for shape in shapes:
-            areas.append(shape.poly.area)
-        print("max area: %s" % max(areas))
-        model.save("model")
-
-        # save shapes
-        for id, shape in enumerate(shapes):
-            save_shape(shape.x, shape.y, shape.num_vertices, id)
-    new_shapes = copy.deepcopy(shapes)
-    new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length)
-
-print("done. Took %s minutes" % ((time.time() - start_time)/60.))
-print('final num_vertices_to_change: %s' % num_vertices_to_change)
-
-print('final time_steps: %s' % time_steps)
-
-
-
-
-#mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=last_saved_shape_num+1)
-#print(f"mean_reward after training: {mean_reward:.2f} +/- {std_reward:.2f}")
+    
+os.sys.exit()
