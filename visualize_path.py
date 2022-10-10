@@ -350,7 +350,7 @@ shape_to_vizualize = [Shape(x, y, num_vertices)]
 env = Train_Environment(num_vertices, 0)
 env = Monitor(env, 'log')
 model = PPO.load('model', env=env) # PPO('MlpPolicy', env, verbose=0)
-time_steps = 20000
+time_steps = 200000
 model.learn(total_timesteps=time_steps)
 
 if env.finished:

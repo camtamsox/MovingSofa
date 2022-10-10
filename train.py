@@ -344,11 +344,11 @@ def generate_new_shapes(shapes_to_change,num_vertices_to_change, num_vertices, s
     y_step_length = step_length
     
     for shape_num, shape in enumerate(shapes_to_change):
-        initial_area = shape.poly.area
         new_area = 0
         for _ in range(num_vertices_to_change):
             original_shape = copy.deepcopy(shape)
-            while new_area < initial_area:
+            initial_area = original_shape.poly.area
+            while new_area <= initial_area:
 
                 rand_vertice = random.randint(0,num_vertices-1)
                 rand_sign_x = random.randint(0,1) # 0 is negative, 1 is positive
@@ -365,12 +365,12 @@ def generate_new_shapes(shapes_to_change,num_vertices_to_change, num_vertices, s
 
                 shape.update_attributes()
                 shape.sort_vertices()
-                if shape.poly.area < initial_area:
-                    shape = original_shape
+                
+                if shape.poly.area <= initial_area:
+                    shape = copy.deepcopy(original_shape)
                 else:
                     new_area = shape.poly.area
-            initial_area = new_area
-            shapes_to_change[shape_num] = shape
+        shapes_to_change[shape_num] = copy.deepcopy(shape)
     return shapes_to_change
 
 def load_shapes(last_saved_shape_num):
@@ -387,13 +387,14 @@ shapes_to_create = 0 ###########################
 generate_initial_circles(shapes_to_create, num_vertices, last_saved_shape_num)
 #last_saved_shape_num += shapes_to_create - 1
 num_vertices_to_change = 100
-step_length = .1
+step_length = .001
 time_steps = 20000
 
 
 start_time = time.time()
 shapes = load_shapes(last_saved_shape_num)
 new_shapes = copy.deepcopy(shapes)
+random.seed(0)
 new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length)
 
 for i in range(len(shapes)):
@@ -406,6 +407,7 @@ env = Train_Environment(num_vertices, last_saved_shape_num)
 env = Monitor(env, 'log')
 model = PPO.load('model', env=env) # PPO('MlpPolicy', env, verbose=0)
 generation_rounds = 1000
+log_interval = 50
 
 for epoch_num in range(generation_rounds):
     shapes_completed = []
@@ -426,7 +428,7 @@ for epoch_num in range(generation_rounds):
     else:
         time_steps-=100
 
-    if epoch_num % 1 == 0:
+    if epoch_num % log_interval == 0:
         print('------------------Epoch %s------------------' % epoch_num)
         areas = []
         for shape in shapes:
