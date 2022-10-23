@@ -12,10 +12,10 @@ from stable_baselines3.common.monitor import Monitor
 import time
 import copy
 
-def initialize_circle(num_vertices):
+def initialize_circle(num_vertices,vertical_shift):
     assert num_vertices%2 == 0
 
-    radius = 0.3
+    radius = 0.1
 
     vertices = np.zeros(num_vertices*2) #create x (even) and y (odd)
 
@@ -44,7 +44,7 @@ def initialize_circle(num_vertices):
     # put into list
     shape_list = []
     for i in range(0, int(num_vertices*2), 2):
-        shape_list.append((vertices[i] - 1.5, vertices[i+1])) # -1.5 to shift to left
+        shape_list.append((vertices[i] - 1.5, vertices[i+1]+vertical_shift)) # -1.5 to shift to left
     
     shape = Polygon(shape_list) # polygon adds an extra vertice at the end for some reason
     return shape
@@ -358,11 +358,11 @@ class Train_Environment(Env):
         self.shapes_completed = np.zeros(self.last_saved_shape_num+1)
         self.shape_num = -1
         return
-def generate_initial_circles(num_shapes_to_generate, num_vertices, last_saved_shape_num):
+def generate_initial_circles(num_shapes_to_generate, num_vertices, last_saved_shape_num,vertical_shift):
     if last_saved_shape_num == None:
         last_saved_shape_num = -1
     for i in range(num_shapes_to_generate):
-        poly = initialize_circle(num_vertices)
+        poly = initialize_circle(num_vertices,vertical_shift)
         x, y = poly.exterior.xy
         save_shape(x[:-1], y[:-1], num_vertices, i + last_saved_shape_num + 1)
     last_saved_shape_num += num_shapes_to_generate
@@ -415,8 +415,8 @@ num_vertices = 10
 last_saved_shape_num = 0 # None if no shapes saved
 shapes_to_create = 0
 
-shape_vertical_shift = 0.1 # affects what this comes up with
-last_saved_shape_num = generate_initial_circles(shapes_to_create, num_vertices, last_saved_shape_num)
+shape_vertical_shift = 0.35 # affects what this comes up with
+last_saved_shape_num = generate_initial_circles(shapes_to_create, num_vertices, last_saved_shape_num,vertical_shift)
 
 #step_length, num_vertices_to_change, time_steps = get_params()
 num_vertices_to_change = 1
