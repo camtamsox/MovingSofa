@@ -43,14 +43,14 @@ def sort_vertices(shape_points_list,num_vertices): # sort vertices based on dist
 
     return
 
-for i in range(10):
-    shape_num = i
-    x,y, num_vertices = get_shape(shape_num)
-    points_list = []
-    for i in range(num_vertices):
-        points_list.append((x[i],y[i]))
-    print('area of shape: %s' % Polygon(points_list).area)
-    x.append(x[0])
-    y.append(y[0])
-    plt.plot(x,y)
-    plt.show()
+
+shape_num = 0
+x,y, num_vertices = get_shape(shape_num)
+points_list = []
+for i in range(num_vertices):
+    points_list.append((x[i],y[i]))
+print('area of shape: %s' % Polygon(points_list).area)
+x.append(x[0])
+y.append(y[0])
+plt.plot(x,y)
+plt.show()

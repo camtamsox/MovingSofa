@@ -414,8 +414,6 @@ def load_shapes(last_saved_shape_num):
 num_vertices = 10
 last_saved_shape_num = 0 # None if no shapes saved
 shapes_to_create = 0
-
-shape_vertical_shift = 0.1 # affects what this comes up with
 last_saved_shape_num = generate_initial_circles(shapes_to_create, num_vertices, last_saved_shape_num)
 
 #step_length, num_vertices_to_change, time_steps = get_params()

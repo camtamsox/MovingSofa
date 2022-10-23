@@ -28,7 +28,7 @@ def initialize_circle(num_vertices):
         vertices[j] = j * x_increment/2.0001
 
         # y value
-        vertices[j + 1] = 0.99*(math.sqrt(radius_squared - pow(vertices[j] - radius, 2))) #0.99 prevents rounding errors
+        vertices[j + 1] = 0.98*(math.sqrt(radius_squared - pow(vertices[j] - radius, 2))) #0.99 prevents rounding errors
 
     # lower half
     for j in range(0, int(num_vertices), 2):
@@ -36,7 +36,7 @@ def initialize_circle(num_vertices):
         vertices[j + int(num_vertices)] = (2*radius-x_increment*j/2.0001)
 
         # y value
-        vertices[j + int(num_vertices) + 1] = 0.99*(-math.sqrt(radius_squared - pow(vertices[j + int(num_vertices)] - radius, 2))) #0.99 prevents rounding errors
+        vertices[j + int(num_vertices) + 1] = 0.98*(-math.sqrt(radius_squared - pow(vertices[j + int(num_vertices)] - radius, 2))) #0.99 prevents rounding errors
 
     for i in range(0,int(num_vertices*2),2):
         vertices[i] = vertices[i] - 1
@@ -44,9 +44,8 @@ def initialize_circle(num_vertices):
     # put into list
     shape_list = []
     for i in range(0, int(num_vertices*2), 2):
-        shape_list.append((vertices[i] - 1.5, vertices[i+1])) # -1.5 to shift to left
-    
-    shape = Polygon(shape_list) # polygon adds an extra vertice at the end for some reason
+        shape_list.append((vertices[i] - 1.5, vertices[i+1])) # -1 to shift to left
+    shape = Polygon(shape_list)
     return shape
 
 
@@ -203,9 +202,7 @@ class Shape():
         self.shape_points_list = []
         for i in range(self.num_vertices):
             self.shape_points_list.append((self.x[i],self.y[i]))
-
         self.poly = Polygon(self.shape_points_list)
-        
         self.state_list = []
         for i in range(self.num_vertices):
             self.state_list.append(self.x[i])
@@ -215,7 +212,6 @@ class Shape():
     def sort_vertices(self): # sort vertices based on distance from each other to avoid lines cutting through middle of shape
         points_left = self.shape_points_list
         self.shape_points_list = []
-        
         while len(points_left) != 1:
             self.shape_points_list.append(points_left[0])
 
@@ -228,17 +224,15 @@ class Shape():
             for i in range(1, len(points_left)):
                 point_x = points_left[i][0]
                 point_y = points_left[i][1]
-                
                 distance = math.sqrt((x - point_x)**2 + (y - point_y)**2)
                 if distance < lowest_distance:
                     lowest_distance = distance
                     lowest_distance_point_index = i
-            if lowest_distance_point_index == None:
-                print(len(points_left))
+            
             points_left[0] = points_left[lowest_distance_point_index]
             del points_left[lowest_distance_point_index]
         self.shape_points_list.append(points_left[0]) # append last point
-        
+
         # update other attributes
         for i in range(self.num_vertices):
             self.x[i] = self.shape_points_list[i][0]
@@ -302,13 +296,13 @@ class Train_Environment(Env):
         fits, is_done = check_points(self.current_shape.poly, hallway_shape, hallway_is_done_shape)
 
         if fits == False:
-            reward = -2
+            reward = -1
             self.x_total_change = x_total_change_prev
             self.y_total_change = y_total_change_prev
             self.theta_total_change = theta_total_change_prev
             done = False
         elif fits == True and is_done == False:
-            reward = -1
+            reward = 0
             done = False
         else:
             if self.finished == False:
@@ -364,7 +358,7 @@ def generate_initial_circles(num_shapes_to_generate, num_vertices, last_saved_sh
     for i in range(num_shapes_to_generate):
         poly = initialize_circle(num_vertices)
         x, y = poly.exterior.xy
-        save_shape(x[:-1], y[:-1], num_vertices, i + last_saved_shape_num + 1)
+        save_shape(x, y, num_vertices, i + last_saved_shape_num + 1)
     last_saved_shape_num += num_shapes_to_generate
     return last_saved_shape_num
 
@@ -379,11 +373,11 @@ def generate_new_shapes(shapes_to_change,num_vertices_to_change, num_vertices, s
             original_shape = copy.deepcopy(shape)
             initial_area = original_shape.poly.area
             while new_area <= initial_area:
-                rand_vertice = random.randint(0,num_vertices-1) # changing this doesn't seem to do anything
-                rand_sign_x = random.randint(0,2) # 0 is negative, 1 is positive, 2 is nothing
-                rand_sign_y = random.randint(0,2)               
-                
 
+                rand_vertice = random.randint(0,num_vertices) # changing this doesn't seem to do anything
+                rand_sign_x = random.randint(0,1) # 0 is negative, 1 is positive
+                rand_sign_y = random.randint(0,1)
+                
                 if rand_sign_x == 0:
                     shape.x[rand_vertice] -= x_step_length
                 else:
@@ -392,15 +386,15 @@ def generate_new_shapes(shapes_to_change,num_vertices_to_change, num_vertices, s
                     shape.y[rand_vertice] -= y_step_length
                 else:
                     shape.y[rand_vertice] += y_step_length
-                
+
                 shape.update_attributes()
                 shape.sort_vertices()
+                
 
-                if shape.poly.area <= initial_area:
+                if shape.poly.area < initial_area:
                     shape = copy.deepcopy(original_shape)
                 else:
                     new_area = shape.poly.area
-                    
         shapes_to_change[shape_num] = copy.deepcopy(shape)
     return shapes_to_change
 
@@ -414,30 +408,30 @@ def load_shapes(last_saved_shape_num):
 num_vertices = 10
 last_saved_shape_num = 0 # None if no shapes saved
 shapes_to_create = 0
-
-shape_vertical_shift = 0.1 # affects what this comes up with
 last_saved_shape_num = generate_initial_circles(shapes_to_create, num_vertices, last_saved_shape_num)
 
-#step_length, num_vertices_to_change, time_steps = get_params()
-num_vertices_to_change = 1
-step_length = .01
-time_steps = 1000
+step_length, num_vertices_to_change, time_steps = get_params()
+#num_vertices_to_change = 5
+#step_length = .001
+#time_steps = 10000
 
 
 start_time = time.time()
 shapes = load_shapes(last_saved_shape_num)
-
 new_shapes = copy.deepcopy(shapes)
-
 random.seed(0)
-new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length)
+for _ in range(1000):
+    new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length)
+save_shape(new_shapes[0].x,new_shapes[0].y,new_shapes[0].num_vertices,100)
+exit()
+
 shapes_completed = np.zeros(last_saved_shape_num+1)
 
 env = Train_Environment(num_vertices, last_saved_shape_num)
 env = Monitor(env, 'log')
 model = PPO.load('model', env=env) # PPO('MlpPolicy', env, verbose=0)
 generation_rounds = 100000
-log_interval = 10
+log_interval = 50
 
 #TODO: have variety of starting position of circles. Why isn't that one vertice changing???
 for epoch_num in range(generation_rounds):
@@ -447,7 +441,7 @@ for epoch_num in range(generation_rounds):
     for shape_num in range(len(env.shapes_completed)):
         if env.shapes_completed[shape_num]: # save only completed shapes
             shapes[shape_num] = copy.deepcopy(new_shapes[shape_num])
-    """
+
     # update step_length and num_vertices_to_change based on number of shapes completed
     num_shapes_completed = 0
     for shape_num in range(len(env.shapes_completed)):
@@ -466,7 +460,7 @@ for epoch_num in range(generation_rounds):
         time_steps = int(time_steps * 0.99)
     else:
         time_steps = int(time_steps * 1.01)
-    """
+
     if epoch_num % log_interval == 0:
         print('------------------Epoch %s------------------' % epoch_num)
         areas = []
@@ -481,7 +475,7 @@ for epoch_num in range(generation_rounds):
             save_shape(shape.x, shape.y, shape.num_vertices, id)
         
         # save parameters
-        #save_params(step_length,num_vertices_to_change,time_steps)
+        save_params(step_length,num_vertices_to_change,time_steps)
 
     new_shapes = copy.deepcopy(shapes)
     new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length)
