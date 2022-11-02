@@ -12,10 +12,8 @@ from stable_baselines3.common.monitor import Monitor
 import time
 import copy
 
-def initialize_circle(num_vertices,vertical_shift):
+def initialize_circle(num_vertices,vertical_shift,radius = 0.2):
     assert num_vertices%2 == 0
-
-    radius = 0.1
 
     vertices = np.zeros(num_vertices*2) #create x (even) and y (odd)
 
@@ -52,9 +50,8 @@ def initialize_circle(num_vertices,vertical_shift):
 
 radius = math.sqrt(2)/2
 hallway_length = 4
+# see desmos file: https://www.desmos.com/calculator/kiroz7hptu 
 def transform_hallway(theta_total_change, x_total_change, y_total_change):
-    # can optimize by doing common number thing
-
 
     # theta must be between 0 and 2pi (weird stuff happens if its not)
     if theta_total_change > 0:
@@ -323,11 +320,6 @@ class Train_Environment(Env):
 
         info = {}
         if self.num_steps > 100000 and self.finished == False: #arbitrary number
-            #draw_points_and_boundaries(self.current_shape.poly, hallway_is_done_shape)
-            #print("self.theta_total_change %s " % self.theta_total_change)
-            #print("self.x_total_change %s " % self.x_total_change)
-            #print("self.y_total_change %s " % self.y_total_change)
-            #print("pathfinder couldn't find a path for self.shape_num = ",str(self.shape_num))
             self.shapes_completed[self.shape_num] = False
             done = True
         
@@ -368,7 +360,7 @@ def generate_initial_circles(num_shapes_to_generate, num_vertices, last_saved_sh
     last_saved_shape_num += num_shapes_to_generate
     return last_saved_shape_num
 
-def generate_new_shapes(shapes_to_change,num_vertices_to_change, num_vertices, step_length):
+def generate_new_shapes(shapes_to_change,num_vertices_to_change, num_vertices, step_length,lock_vertical):
 
     x_step_length = step_length
     y_step_length = step_length
@@ -381,25 +373,29 @@ def generate_new_shapes(shapes_to_change,num_vertices_to_change, num_vertices, s
             while new_area <= initial_area:
                 rand_vertice = random.randint(0,num_vertices-1) # changing this doesn't seem to do anything
                 rand_sign_x = random.randint(0,2) # 0 is negative, 1 is positive, 2 is nothing
-                rand_sign_y = random.randint(0,2)               
+                if lock_vertical:
+                    rand_sign_y = 2
+                else:
+                    rand_sign_y = random.randint(0,2)               
                 
 
                 if rand_sign_x == 0:
                     shape.x[rand_vertice] -= x_step_length
-                else:
+                elif rand_sign_x == 1:
                     shape.x[rand_vertice] += x_step_length
                 if rand_sign_y == 0:
                     shape.y[rand_vertice] -= y_step_length
-                else:
+                elif rand_sign_y == 1:
                     shape.y[rand_vertice] += y_step_length
                 
                 shape.update_attributes()
                 shape.sort_vertices()
-
+                
                 if shape.poly.area <= initial_area:
                     shape = copy.deepcopy(original_shape)
                 else:
                     new_area = shape.poly.area
+                
                     
         shapes_to_change[shape_num] = copy.deepcopy(shape)
     return shapes_to_change
@@ -411,16 +407,17 @@ def load_shapes(last_saved_shape_num):
         shapes.append(Shape(x, y, num_vertices))
     return shapes
 
-num_vertices = 10
-last_saved_shape_num = 0 # None if no shapes saved
-shapes_to_create = 0
+num_vertices = 20
+last_saved_shape_num = None # None if no shapes saved yet
+shapes_to_create = 1
 
-shape_vertical_shift = 0.35 # affects what this comes up with
+vertical_shift = 0.25
+lock_vertical = False
 last_saved_shape_num = generate_initial_circles(shapes_to_create, num_vertices, last_saved_shape_num,vertical_shift)
 
 #step_length, num_vertices_to_change, time_steps = get_params()
 num_vertices_to_change = 1
-step_length = .01
+step_length = .001
 time_steps = 1000
 
 
@@ -429,15 +426,14 @@ shapes = load_shapes(last_saved_shape_num)
 
 new_shapes = copy.deepcopy(shapes)
 
-random.seed(0)
-new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length)
+new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length,lock_vertical)
 shapes_completed = np.zeros(last_saved_shape_num+1)
 
 env = Train_Environment(num_vertices, last_saved_shape_num)
 env = Monitor(env, 'log')
-model = PPO.load('model', env=env) # PPO('MlpPolicy', env, verbose=0)
+model = PPO('MlpPolicy', env, verbose=0) #PPO.load('model', env=env)
 generation_rounds = 100000
-log_interval = 10
+log_interval = 30
 
 #TODO: have variety of starting position of circles. Why isn't that one vertice changing???
 for epoch_num in range(generation_rounds):
@@ -447,26 +443,7 @@ for epoch_num in range(generation_rounds):
     for shape_num in range(len(env.shapes_completed)):
         if env.shapes_completed[shape_num]: # save only completed shapes
             shapes[shape_num] = copy.deepcopy(new_shapes[shape_num])
-    """
-    # update step_length and num_vertices_to_change based on number of shapes completed
-    num_shapes_completed = 0
-    for shape_num in range(len(env.shapes_completed)):
-        if env.shapes_completed[shape_num]:
-            num_shapes_completed+=1
-    if num_shapes_completed > int((last_saved_shape_num + 1)/2.):
-        step_length = step_length * 1.01
-        num_vertices_to_change+=1
-    else:
-        step_length = step_length * 0.99
-        if num_vertices_to_change > 2:
-            num_vertices_to_change-=1
 
-    # update time_steps based on if env finished or not
-    if env.finished:
-        time_steps = int(time_steps * 0.99)
-    else:
-        time_steps = int(time_steps * 1.01)
-    """
     if epoch_num % log_interval == 0:
         print('------------------Epoch %s------------------' % epoch_num)
         areas = []
@@ -484,13 +461,6 @@ for epoch_num in range(generation_rounds):
         #save_params(step_length,num_vertices_to_change,time_steps)
 
     new_shapes = copy.deepcopy(shapes)
-    new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length)
+    new_shapes = generate_new_shapes(new_shapes, num_vertices_to_change, num_vertices, step_length,lock_vertical)
 
 print("done. Took %s minutes" % ((time.time() - start_time)/60.))
-print('final num_vertices_to_change: %s' % num_vertices_to_change)
-
-print('final time_steps: %s' % time_steps)
-
-
-#mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=last_saved_shape_num+1)
-#print(f"mean_reward after training: {mean_reward:.2f} +/- {std_reward:.2f}")
