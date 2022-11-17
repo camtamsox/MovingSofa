@@ -435,7 +435,6 @@ model = PPO('MlpPolicy', env, verbose=0) #PPO.load('model', env=env)
 generation_rounds = 100000
 log_interval = 30
 
-#TODO: have variety of starting position of circles. Why isn't that one vertice changing???
 for epoch_num in range(generation_rounds):
     env.reset_shapes_completed_finished()
     model.learn(total_timesteps=time_steps)
