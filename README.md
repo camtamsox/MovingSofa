@@ -11,8 +11,8 @@ In my program, I decided to first use a simplified version of ultimate frisbee a
 A depiction of the neural network of the AI.
 
 After I got the code to work, I trained the algorithm for thousands of games. However, even after experimenting with different hyperparameters, I could not get the algorithm to learn anything meaningful. A typical game is shown below.
-![image](https://github.com/camtamsox/MovingSofa/assets/109252429/1154868d-0830-41b4-9560-b628ce2f292a)
 
+https://github.com/camtamsox/MovingSofa/assets/109252429/a72006ea-f5f4-46e9-a72a-6bd088b0e130
 
 
 Why this project didn't work:
