@@ -1,4 +1,5 @@
 My calculus teacher introduced me to an unsolved math problem called the moving sofa problem. The problem asked for the largest area 2D sofa that can fit through an L-shaped hallway. Instead of using calculus to try to solve this problem, I decided to use a computational approach.
+
 ![sofa problem](https://github.com/camtamsox/MovingSofa/assets/109252429/264466d7-3f1d-4237-b1f7-c975973e3357)
 
 _A sofa derived by John Hammersley. This animation is from Wikipedia._
